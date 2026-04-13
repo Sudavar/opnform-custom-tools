@@ -35,7 +35,7 @@
 
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
-      if (!key || !key.includes('openform-(.+)-pending-submission-')) continue;
+      if (!key || !key.includes('pending-submission-')) continue;
 
       const match = key.match(/openform-(.+)-pending-submission-(.+)-(\d+)$/);
       if (!match) continue;
