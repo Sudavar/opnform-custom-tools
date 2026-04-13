@@ -23,40 +23,33 @@
 
   log('[FormSnippet] Active');
 
-  let cached_form_data = null;
+  let active_submission_key = null;
   let button_intercepted = false;
 
+  // Intercept localStorage.setItem to track which key OpnForm is actively using
+  const _orig_setItem = localStorage.setItem.bind(localStorage);
+  localStorage.setItem = function(key, value) {
+    if (key && key.includes('pending-submission-')) {
+      active_submission_key = key;
+      log('[FormSnippet] Active key updated:', key);
+    }
+    return _orig_setItem(key, value);
+  };
+
   function get_opnform_data() {
-    if (cached_form_data) return cached_form_data;
-
-    let best_data = null;
-    let best_field_count = 0;
-    let best_key = null;
-
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (!key || !key.includes('pending-submission-')) continue;
-
-      const match = key.match(/openform-(.+)-pending-submission-(.+)-(\d+)$/);
-      if (!match) continue;
-
-      try {
-        const data = JSON.parse(localStorage.getItem(key));
-        const field_count = Object.keys(data).length;
-
-        log('[FormSnippet] Found:', key, 'fields:', field_count);
-
-        if (field_count > best_field_count) {
-          best_field_count = field_count;
-          best_data = data;
-          best_key = key;
-        }
-      } catch (e) { error('[FormSnippet] Parse error:', e); }
+    if (!active_submission_key) {
+      log('[FormSnippet] No active submission key tracked yet');
+      return null;
     }
 
-    log('[FormSnippet] Selected:', best_key, 'with', best_field_count, 'fields');
-    cached_form_data = best_data;
-    return best_data;
+    try {
+      const data = JSON.parse(localStorage.getItem(active_submission_key));
+      log('[FormSnippet] Reading from:', active_submission_key);
+      return data;
+    } catch (e) {
+      error('[FormSnippet] Parse error:', e);
+      return null;
+    }
   }
 
   function intercept_submit() {
