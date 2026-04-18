@@ -114,6 +114,7 @@
           log('[FormSnippet] Result:', response_data);
 
           if (response_data.type === 'success') {
+            localStorage.removeItem(active_submission_key);
             log('[FormSnippet] Redirecting...');
             const base_url = window.location.pathname;
             const redirect_url = `${base_url}?${FIELDS.incoming_afm}=${encodeURIComponent(result.afm_value)}&${FIELDS.marriage_status}=${encodeURIComponent(result.marriage_status)}&${FIELDS.is_spouse}=true&${FIELDS.name_spouse}=${encodeURIComponent(result.name_value ?? '')}`;
