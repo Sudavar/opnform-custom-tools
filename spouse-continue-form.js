@@ -14,7 +14,8 @@
     incoming_afm: 'd41b8d88-40e2-49be-ace5-7996ba1ea713',
     is_spouse: '90ef9493-e385-4e98-9061-1ee40f5538a0',
     name: '0f989032-f684-42c2-99c1-870afe25569b',
-    name_spouse: 'c69c7bf2-b386-4f94-9f60-0151f815a5e6'
+    name_spouse: 'c69c7bf2-b386-4f94-9f60-0151f815a5e6',
+    separate_taxform: 'dc7501b3-bb46-4f78-beb6-1afc7673614b'
   };
 
   const url_params = new URLSearchParams(window.location.search);
@@ -65,10 +66,11 @@
     const spouse_send_email = data[FIELDS.spouse_send_email];
     const afm_value = data[FIELDS.afm];
     const name_value = data[FIELDS.name];
+    const separate_taxform = data[FIELDS.separate_taxform];
 
-    log('[FormSnippet] Values:', { marriage_status, spouse_send_email, afm_value, name_value });
+    log('[FormSnippet] Values:', { marriage_status, spouse_send_email, afm_value, name_value, separate_taxform });
 
-    if (marriage_status === 'ΕΓΓΑΜΟΣ/Η' && !spouse_send_email) {
+    if (marriage_status === 'ΕΓΓΑΜΟΣ/Η' && !spouse_send_email && !separate_taxform) {
       log('[FormSnippet] Condition met');
       return { afm_value, marriage_status, name_value };
     }
