@@ -12,7 +12,9 @@
     spouse_send_email: '191b9a50-02bc-4f1a-ae3e-1c24884d2a85',
     afm: 'aa903600-6858-447c-ae9c-91220500b152',
     incoming_afm: 'd41b8d88-40e2-49be-ace5-7996ba1ea713',
-    is_spouse: '90ef9493-e385-4e98-9061-1ee40f5538a0'
+    is_spouse: '90ef9493-e385-4e98-9061-1ee40f5538a0',
+    name: '0f989032-f684-42c2-99c1-870afe25569b',
+    name_spouse: '86aaface-b04d-4be1-ae7b-b424174bb42b'
   };
 
   const url_params = new URLSearchParams(window.location.search);
@@ -62,12 +64,13 @@
     const marriage_status = data[FIELDS.marriage_status];
     const spouse_send_email = data[FIELDS.spouse_send_email];
     const afm_value = data[FIELDS.afm];
+    const name_value = data[FIELDS.name];
 
-    log('[FormSnippet] Values:', { marriage_status, spouse_send_email, afm_value });
+    log('[FormSnippet] Values:', { marriage_status, spouse_send_email, afm_value, name_value });
 
     if (marriage_status === 'ΕΓΓΑΜΟΣ/Η' && !spouse_send_email) {
       log('[FormSnippet] Condition met');
-      return { afm_value, marriage_status };
+      return { afm_value, marriage_status, name_value };
     }
 
     log('[FormSnippet] Condition not met');
@@ -111,7 +114,7 @@
           if (response_data.type === 'success') {
             log('[FormSnippet] Redirecting...');
             const base_url = window.location.pathname;
-            const redirect_url = `${base_url}?${FIELDS.incoming_afm}=${encodeURIComponent(result.afm_value)}&${FIELDS.marriage_status}=${encodeURIComponent(result.marriage_status)}&${FIELDS.is_spouse}=true`;
+            const redirect_url = `${base_url}?${FIELDS.incoming_afm}=${encodeURIComponent(result.afm_value)}&${FIELDS.marriage_status}=${encodeURIComponent(result.marriage_status)}&${FIELDS.is_spouse}=true&${FIELDS.name_spouse}=${encodeURIComponent(result.name_value ?? '')}`;
             log('[FormSnippet] URL:', redirect_url);
             window.location.href = redirect_url;
           }

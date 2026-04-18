@@ -33,6 +33,8 @@ If the condition is NOT met, the script does nothing and OpnForm's handler runs 
 | afm               | aa903600-6858-447c-ae9c-91220500b152  |
 | incoming_afm      | d41b8d88-40e2-49be-ace5-7996ba1ea713  |
 | is_spouse         | 90ef9493-e385-4e98-9061-1ee40f5538a0  |
+| name              | 0f989032-f684-42c2-99c1-870afe25569b  |
+| name_spouse       | 86aaface-b04d-4be1-ae7b-b424174bb42b  |
 
 ## Why these patterns were chosen
 
