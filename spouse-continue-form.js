@@ -2,8 +2,8 @@
   'use strict';
 
   // DEBUG MODE - Uncomment console.log lines below to enable debugging
-  // const DEBUG = true;
-  const DEBUG = false;
+  const DEBUG = true;
+  // const DEBUG = false;
   function log() { if (DEBUG) console.log.apply(console, arguments); }
   function error() { if (DEBUG) console.error.apply(console, arguments); }
 
