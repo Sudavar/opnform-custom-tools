@@ -1,9 +1,7 @@
 (function() {
   'use strict';
 
-  // DEBUG MODE - Uncomment console.log lines below to enable debugging
-  // const DEBUG = true;
-  const DEBUG = false;
+  const DEBUG = true;
   function log() { if (DEBUG) console.log.apply(console, arguments); }
   function error() { if (DEBUG) console.error.apply(console, arguments); }
 
@@ -18,123 +16,105 @@
     separate_taxform: 'dc7501b3-bb46-4f78-beb6-1afc7673614b'
   };
 
+  log('[FormSnippet] Script loaded');
+  log('[FormSnippet] URL:', window.location.href);
+
   const url_params = new URLSearchParams(window.location.search);
-  if (url_params.get(FIELDS.incoming_afm)) {
-    log('[FormSnippet] Skip - incoming_afm present in URL');
+  const incoming_afm_in_url = url_params.get(FIELDS.incoming_afm);
+  log('[FormSnippet] incoming_afm in URL:', incoming_afm_in_url);
+
+  if (incoming_afm_in_url) {
+    log('[FormSnippet] Skip - incoming_afm present in URL, exiting');
     return;
   }
 
-  log('[FormSnippet] Active');
+  log('[FormSnippet] Active - installing fetch interceptor');
 
-  let active_submission_key = null;
-  let button_intercepted = false;
+  const _orig_fetch = window.fetch.bind(window);
+  window.fetch = async function(url, options) {
+    log('[FormSnippet] fetch called:', typeof url === 'string' ? url : '(non-string url)', 'method:', options && options.method);
 
-  // Intercept localStorage.setItem to track which key OpnForm is actively using
-  const _orig_setItem = localStorage.setItem.bind(localStorage);
-  localStorage.setItem = function(key, value) {
-    if (key && key.includes('pending-submission-')) {
-      active_submission_key = key;
-      log('[FormSnippet] Active key updated:', key);
+    const is_form_submit = typeof url === 'string' &&
+      url.includes('/api/forms/') &&
+      url.includes('/answer') &&
+      options && options.method === 'POST';
+
+    if (!is_form_submit) {
+      return _orig_fetch(url, options);
     }
-    return _orig_setItem(key, value);
-  };
 
-  function get_opnform_data() {
-    if (!active_submission_key) {
-      log('[FormSnippet] No active submission key tracked yet');
-      return null;
+    log('[FormSnippet] >>> Form submit fetch intercepted! URL:', url);
+    log('[FormSnippet] Raw body:', options.body);
+
+    let body;
+    try {
+      body = JSON.parse(options.body);
+      log('[FormSnippet] Parsed body keys:', Object.keys(body));
+      log('[FormSnippet] Full body:', body);
+    } catch (e) {
+      error('[FormSnippet] Body parse failed:', e);
+      return _orig_fetch(url, options);
     }
+
+    const marriage_status = body[FIELDS.marriage_status];
+    const spouse_send_email = body[FIELDS.spouse_send_email];
+    const separate_taxform = body[FIELDS.separate_taxform];
+    const afm_value = body[FIELDS.afm];
+    const name_value = body[FIELDS.name];
+
+    log('[FormSnippet] Condition values:');
+    log('  marriage_status:', marriage_status, '(want: ΕΓΓΑΜΟΣ/Η, match:', marriage_status === 'ΕΓΓΑΜΟΣ/Η', ')');
+    log('  spouse_send_email:', spouse_send_email, '(want: falsy, is falsy:', !spouse_send_email, ')');
+    log('  separate_taxform:', separate_taxform, '(want: falsy, is falsy:', !separate_taxform, ')');
+    log('  afm:', afm_value);
+    log('  name:', name_value);
+
+    if (marriage_status !== 'ΕΓΓΑΜΟΣ/Η') {
+      log('[FormSnippet] Condition NOT met: marriage_status mismatch, passing through');
+      return _orig_fetch(url, options);
+    }
+    if (spouse_send_email) {
+      log('[FormSnippet] Condition NOT met: spouse_send_email is set, passing through');
+      return _orig_fetch(url, options);
+    }
+    if (separate_taxform) {
+      log('[FormSnippet] Condition NOT met: separate_taxform is set, passing through');
+      return _orig_fetch(url, options);
+    }
+
+    log('[FormSnippet] All conditions met! Submitting via intercepted fetch...');
 
     try {
-      const data = JSON.parse(localStorage.getItem(active_submission_key));
-      log('[FormSnippet] Reading from:', active_submission_key);
-      return data;
-    } catch (e) {
-      error('[FormSnippet] Parse error:', e);
-      return null;
-    }
-  }
+      log('[FormSnippet] Calling _orig_fetch...');
+      const response = await _orig_fetch(url, options);
+      log('[FormSnippet] Got response, status:', response.status);
 
-  function intercept_submit() {
-    const data = get_opnform_data();
-    if (!data) {
-      log('[FormSnippet] No form data found');
-      return null;
-    }
+      const response_data = await response.clone().json();
+      log('[FormSnippet] Response data:', response_data);
 
-    const marriage_status = data[FIELDS.marriage_status];
-    const spouse_send_email = data[FIELDS.spouse_send_email];
-    const afm_value = data[FIELDS.afm];
-    const name_value = data[FIELDS.name];
-    const separate_taxform = data[FIELDS.separate_taxform];
-
-    log('[FormSnippet] Values:', { marriage_status, spouse_send_email, afm_value, name_value, separate_taxform });
-
-    if (marriage_status === 'ΕΓΓΑΜΟΣ/Η' && !spouse_send_email && !separate_taxform) {
-      log('[FormSnippet] Condition met');
-      return { afm_value, marriage_status, name_value };
-    }
-
-    log('[FormSnippet] Condition not met');
-    return null;
-  }
-
-  function try_intercept() {
-    const submit_button = document.querySelector('button[type="submit"]');
-    if (!submit_button || button_intercepted) return;
-
-    button_intercepted = true;
-    log('[FormSnippet] Button found, adding listener');
-
-    submit_button.addEventListener('click', async function(e) {
-      log('[FormSnippet] Button clicked');
-
-      const result = intercept_submit();
-
-      if (result) {
-        e.stopImmediatePropagation();
-        e.preventDefault();
-
-        try {
-          const data = get_opnform_data();
-          if (!data) return;
-
-          data.completion_time = Math.floor(Date.now() / 1000);
-
-          log('[FormSnippet] Submitting...');
-
-          const response = await fetch('/api/forms/prototype/answer', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data),
-            credentials: 'include'
-          });
-
-          const response_data = await response.json();
-          log('[FormSnippet] Result:', response_data);
-
-          if (response_data.type === 'success') {
-            localStorage.removeItem(active_submission_key);
-            log('[FormSnippet] Redirecting...');
-            const base_url = window.location.pathname;
-            const redirect_url = `${base_url}?${FIELDS.incoming_afm}=${encodeURIComponent(result.afm_value)}&${FIELDS.marriage_status}=${encodeURIComponent(result.marriage_status)}&${FIELDS.is_spouse}=true&${FIELDS.name_spouse}=${encodeURIComponent(result.name_value ?? '')}`;
-            log('[FormSnippet] URL:', redirect_url);
-            window.location.href = redirect_url;
+      if (response_data.type === 'success') {
+        for (let i = localStorage.length - 1; i >= 0; i--) {
+          const k = localStorage.key(i);
+          if (k && k.includes('pending-submission')) {
+            localStorage.removeItem(k);
+            log('[FormSnippet] Cleared localStorage key:', k);
           }
-        } catch (err) {
-          error('[FormSnippet] Error:', err);
         }
+        const base_url = window.location.pathname;
+        const redirect_url = `${base_url}?${FIELDS.incoming_afm}=${encodeURIComponent(afm_value)}&${FIELDS.marriage_status}=${encodeURIComponent(marriage_status)}&${FIELDS.is_spouse}=true&${FIELDS.name_spouse}=${encodeURIComponent(name_value ?? '')}`;
+        log('[FormSnippet] Success! Redirecting to:', redirect_url);
+        window.location.href = redirect_url;
+        return new Promise(() => {});
       }
-    }, true);
-  }
 
-  const observer = new MutationObserver(try_intercept);
-  observer.observe(document.body, { childList: true, subtree: true });
+      log('[FormSnippet] Response was not success type:', response_data.type, '- passing response back');
+      return response;
+    } catch (err) {
+      error('[FormSnippet] Error during intercepted submit:', err);
+      log('[FormSnippet] Falling back to plain fetch');
+      return _orig_fetch(url, options);
+    }
+  };
 
-  log('[FormSnippet] Observer started');
-  setTimeout(() => {
-    observer.disconnect();
-    log('[FormSnippet] Observer disconnected');
-  }, 600000);
+  log('[FormSnippet] Fetch interceptor installed. Watching all fetch calls.');
 })();
-
