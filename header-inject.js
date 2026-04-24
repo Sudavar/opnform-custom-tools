@@ -1,7 +1,7 @@
 const slug = window.location.pathname.split('/').filter(Boolean).pop();
 if (!slug) throw new Error('header-inject: could not determine form slug from pathname');
 const CACHE_KEY = `header:${slug}`;
-const API_URL = `https://headers.daphne.agrilakon.gr/${slug}`;
+const API_URL = `https://headers.home.codescar.eu/${slug}`;
 
 function buildHtmlPromise() {
   const cached = localStorage.getItem(CACHE_KEY);
