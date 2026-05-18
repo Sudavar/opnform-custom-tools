@@ -30,7 +30,25 @@
     return;
   }
 
+  // Sentry init — runs only in the primary flow, not the spouse redirect.
+  // DSN is embedded in the Loader Script <script src> URL in OpnForm's head injection.
+  if (window.Sentry) {
+    Sentry.onLoad(function() {
+      Sentry.init({
+        environment: 'production',
+        release: 'spouse-form@0.6.3',
+        replaysSessionSampleRate: 0.1,
+        replaysOnErrorSampleRate: 1.0,
+      });
+    });
+  }
+
+  function crumb(message, data) {
+    if (window.Sentry) Sentry.addBreadcrumb({ message, data, level: 'info' });
+  }
+
   log('[FormSnippet] Active - installing fetch interceptor');
+  crumb('FormSnippet active - installing fetch interceptor');
 
   const _orig_fetch = window.fetch.bind(window);
   window.fetch = async function(url, options) {
@@ -47,6 +65,7 @@
 
     log('[FormSnippet] >>> Form submit fetch intercepted! URL:', url);
     log('[FormSnippet] Raw body:', options.body);
+    crumb('Form submit fetch intercepted', { url });
 
     let body;
     try {
@@ -55,6 +74,7 @@
       log('[FormSnippet] Full body:', body);
     } catch (e) {
       error('[FormSnippet] Body parse failed:', e);
+      if (window.Sentry) Sentry.captureException(e, { extra: { context: 'body_parse' } });
       return _orig_fetch(url, options);
     }
 
@@ -71,6 +91,12 @@
     log('  afm:', afm_value);
     log('  name:', name_value);
 
+    crumb('Conditions evaluated', {
+      marriage_status_match: marriage_status === 'ΕΓΓΑΜΟΣ/Η',
+      spouse_send_email_set: !!spouse_send_email,
+      separate_taxform_set: !!separate_taxform,
+    });
+
     if (marriage_status !== 'ΕΓΓΑΜΟΣ/Η') {
       log('[FormSnippet] Condition NOT met: marriage_status mismatch, passing through');
       return _orig_fetch(url, options);
@@ -85,11 +111,13 @@
     }
 
     log('[FormSnippet] All conditions met! Submitting via intercepted fetch...');
+    crumb('All conditions met, submitting');
 
     try {
       log('[FormSnippet] Calling _orig_fetch...');
       const response = await _orig_fetch(url, options);
       log('[FormSnippet] Got response, status:', response.status);
+      crumb('Got API response', { status: response.status });
 
       const response_data = await response.clone().json();
       log('[FormSnippet] Response data:', response_data);
@@ -105,15 +133,23 @@
         const base_url = window.location.pathname;
         const redirect_url = `${base_url}?${FIELDS.incoming_afm}=${encodeURIComponent(afm_value)}&${FIELDS.marriage_status}=${encodeURIComponent(marriage_status)}&${FIELDS.is_spouse}=true&${FIELDS.name_spouse}=${encodeURIComponent(name_value ?? '')}`;
         log('[FormSnippet] Success! Redirecting to:', redirect_url);
+        crumb('Redirecting to spouse form');
         window.location.href = redirect_url;
         return new Promise(() => {});
       }
 
       log('[FormSnippet] Response was not success type:', response_data.type, '- passing response back');
+      if (window.Sentry) {
+        Sentry.captureMessage('Form submit returned non-success', {
+          level: 'warning',
+          extra: { type: response_data.type, status: response.status },
+        });
+      }
       return response;
     } catch (err) {
       error('[FormSnippet] Error during intercepted submit:', err);
       log('[FormSnippet] Falling back to plain fetch');
+      if (window.Sentry) Sentry.captureException(err, { extra: { context: 'intercepted_submit' } });
       return _orig_fetch(url, options);
     }
   };
