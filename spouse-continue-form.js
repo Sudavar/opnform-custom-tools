@@ -30,21 +30,8 @@
     return;
   }
 
-  // Sentry init — runs only in the primary flow, not the spouse redirect.
-  // DSN is embedded in the Loader Script <script src> URL in OpnForm's head injection.
-  if (window.Sentry) {
-    Sentry.onLoad(function() {
-      Sentry.init({
-        environment: 'production',
-        release: 'spouse-form@0.6.3',
-        replaysSessionSampleRate: 0.1,
-        replaysOnErrorSampleRate: 1.0,
-      });
-    });
-  }
-
   function crumb(message, data) {
-    if (window.Sentry) Sentry.addBreadcrumb({ message, data, level: 'info' });
+    if (window.Sentry) window.Sentry.addBreadcrumb({ message, data, level: 'info' });
   }
 
   log('[FormSnippet] Active - installing fetch interceptor');
@@ -74,7 +61,7 @@
       log('[FormSnippet] Full body:', body);
     } catch (e) {
       error('[FormSnippet] Body parse failed:', e);
-      if (window.Sentry) Sentry.captureException(e, { extra: { context: 'body_parse' } });
+      if (window.Sentry) window.Sentry.captureException(e, { extra: { context: 'body_parse' } });
       return _orig_fetch(url, options);
     }
 
@@ -119,7 +106,14 @@
       log('[FormSnippet] Got response, status:', response.status);
       crumb('Got API response', { status: response.status });
 
-      const response_data = await response.clone().json();
+      let response_data;
+      try {
+        response_data = await response.clone().json();
+      } catch (_parse_err) {
+        // Empty or non-JSON body — happens during page navigation; not an error.
+        log('[FormSnippet] Response body is empty/non-JSON, passing response back');
+        return response;
+      }
       log('[FormSnippet] Response data:', response_data);
 
       if (response_data.type === 'success') {
@@ -140,7 +134,7 @@
 
       log('[FormSnippet] Response was not success type:', response_data.type, '- passing response back');
       if (window.Sentry) {
-        Sentry.captureMessage('Form submit returned non-success', {
+        window.Sentry.captureMessage('Form submit returned non-success', {
           level: 'warning',
           extra: { type: response_data.type, status: response.status },
         });
@@ -149,7 +143,7 @@
     } catch (err) {
       error('[FormSnippet] Error during intercepted submit:', err);
       log('[FormSnippet] Falling back to plain fetch');
-      if (window.Sentry) Sentry.captureException(err, { extra: { context: 'intercepted_submit' } });
+      if (window.Sentry) window.Sentry.captureException(err, { extra: { context: 'intercepted_submit' } });
       return _orig_fetch(url, options);
     }
   };
